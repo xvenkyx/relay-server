@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live View</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #1a1a1a;
+      --surface: #242424;
+      --text: #e0e0e0;
+      --muted: #888;
+      --accent: #4a7fff;
+      --code-bg: #2a2a2a;
+      --note-bg: #1e2a1e;
+      --note-border: #3a6b3a;
+      --streaming-dot: #4caf50;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    #status-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid #333;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #555;
+      flex-shrink: 0;
+    }
+    #status-dot.connected { background: var(--streaming-dot); }
+    #status-dot.streaming { background: var(--accent); animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    #content {
+      padding: 20px 16px 40px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    /* AI response content styles */
+    #ai-content p { margin-bottom: 12px; }
+    #ai-content h1, #ai-content h2, #ai-content h3 {
+      font-weight: 600;
+      margin: 20px 0 8px;
+      color: #fff;
+    }
+    #ai-content h1 { font-size: 1.3em; }
+    #ai-content h2 { font-size: 1.15em; }
+    #ai-content h3 { font-size: 1em; }
+
+    #ai-content ul, #ai-content ol {
+      padding-left: 22px;
+      margin-bottom: 12px;
+    }
+    #ai-content li { margin-bottom: 4px; }
+
+    #ai-content strong, #ai-content b { color: #fff; font-weight: 600; }
+    #ai-content em, #ai-content i { color: #ccc; font-style: italic; }
+
+    #ai-content code {
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: #e0c46a;
+    }
+
+    #ai-content pre {
+      background: var(--code-bg);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+      margin-bottom: 14px;
+      border: 1px solid #333;
+    }
+    #ai-content pre code {
+      background: none;
+      padding: 0;
+      color: #ccc;
+      font-size: 0.83em;
+    }
+
+    #ai-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 14px;
+      font-size: 0.9em;
+    }
+    #ai-content th, #ai-content td {
+      border: 1px solid #333;
+      padding: 7px 12px;
+      text-align: left;
+    }
+    #ai-content th { background: var(--surface); color: #fff; }
+    #ai-content blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .user-note {
+      background: var(--note-bg);
+      border-left: 3px solid var(--note-border);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      font-size: 0.92em;
+      color: #b8d4b8;
+    }
+    .user-note::before {
+      content: "Note";
+      display: block;
+      font-size: 0.75em;
+      color: var(--note-border);
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #stream-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    #empty-state {
+      color: var(--muted);
+      text-align: center;
+      padding: 60px 20px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="status-bar">
+    <div id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+
+  <div id="content">
+    <div id="ai-content">
+      <div id="empty-state">Waiting for content…</div>
+    </div>
+    <div id="notes-content"></div>
+  </div>
+
+  <script>
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const aiContent = document.getElementById('ai-content');
+    const notesContent = document.getElementById('notes-content');
+    const emptySate = document.getElementById('empty-state');
+
+    // Relay URL is this same server but as WebSocket
+    const wsUrl = location.origin.replace(/^http/, 'ws') + '?role=viewer&token=mobile';
+    let ws;
+    let isStreaming = false;
+    let cursor;
+
+    function setStatus(state, text) {
+      statusDot.className = state;
+      statusText.textContent = text;
+    }
+
+    function removeCursor() {
+      if (cursor && cursor.parentNode) cursor.parentNode.removeChild(cursor);
+      cursor = null;
+    }
+
+    function addCursor() {
+      removeCursor();
+      cursor = document.createElement('span');
+      cursor.id = 'stream-cursor';
+      aiContent.appendChild(cursor);
+    }
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => setStatus('connected', 'Connected');
+
+      ws.onclose = () => {
+        setStatus('', 'Disconnected — reconnecting…');
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => setStatus('', 'Connection error');
+
+      ws.onmessage = ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch { return; }
+
+        if (msg.type === 'stream-start') {
+          emptySate && emptySate.remove();
+          aiContent.innerHTML = '';
+          notesContent.innerHTML = '';
+          isStreaming = true;
+          setStatus('streaming', 'Streaming…');
+          addCursor();
+        }
+
+        else if (msg.type === 'stream-chunk') {
+          emptySate && emptySate.remove();
+          removeCursor();
+          aiContent.innerHTML = sanitize(msg.html);
+          addCursor();
+          window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        else if (msg.type === 'stream-end') {
+          isStreaming = false;
+          removeCursor();
+          setStatus('connected', 'Done');
+        }
+
+        else if (msg.type === 'manual-content') {
+          emptySate && emptySate.remove();
+          if (msg.replace) {
+            aiContent.innerHTML = sanitize(msg.html);
+            notesContent.innerHTML = '';
+          } else {
+            const div = document.createElement('div');
+            div.innerHTML = sanitize(msg.html);
+            aiContent.appendChild(div);
+          }
+          window.scrollTo(0, document.body.scrollHeight);
+          setStatus('connected', 'Updated');
+        }
+
+        else if (msg.type === 'user-note') {
+          const note = document.createElement('div');
+          note.className = 'user-note';
+          note.innerHTML = sanitize(msg.html);
+          notesContent.appendChild(note);
+          window.scrollTo(0, document.body.scrollHeight);
+        }
+      };
+    }
+
+    // Basic sanitizer — strips script tags, keeps formatting tags
+    function sanitize(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
+      div.querySelectorAll('[onclick],[onload],[onerror],[onmouseover]').forEach(el => {
+        ['onclick','onload','onerror','onmouseover'].forEach(a => el.removeAttribute(a));
+      });
+      return div.innerHTML;
+    }
+
+    connect();
+  </script>
+</body>
+</html>
