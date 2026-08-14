@@ -6,11 +6,17 @@ const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3001;
 const RELAY_SECRET = process.env.RELAY_SECRET || 'changeme';
 
-// ── HTTP server (serves mobile.html for phone viewers) ───────────────────────
-
 const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/view') {
+  const url = req.url.split('?')[0];
+  if (url === '/' || url === '/view') {
     const file = path.join(__dirname, 'mobile.html');
+    fs.readFile(file, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  } else if (url === '/admin') {
+    const file = path.join(__dirname, 'admin.html');
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); res.end('Not found'); return; }
       res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -22,14 +28,13 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// ── WebSocket server ──────────────────────────────────────────────────────────
-
 const wss = new WebSocketServer({ server });
 
 const viewers = new Set();
-let publisher = null;
+let publisher = null;  // Chrome extension
+let admin = null;      // Admin editor
 
-// Last known state — new viewers get it immediately on connect
+// Last known admin-edited snapshot — new viewers get it immediately
 let lastSnapshot = null;
 
 function broadcast(msg) {
@@ -41,19 +46,15 @@ function broadcast(msg) {
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://localhost`);
-  const role = url.searchParams.get('role');       // 'publisher' or 'viewer'
-  const secret = url.searchParams.get('secret');   // publisher auth
-  const token = url.searchParams.get('token');     // viewer license token
+  const role = url.searchParams.get('role');
+  const secret = url.searchParams.get('secret');
+  const token = url.searchParams.get('token');
 
-  // ── Publisher connection ──────────────────────────────────────────────────
+  // ── Publisher (Chrome extension) ──────────────────────────────
   if (role === 'publisher') {
-    if (secret !== RELAY_SECRET) {
-      ws.close(4001, 'Unauthorized');
-      return;
-    }
-    // Only one publisher at a time
+    if (secret !== RELAY_SECRET) { ws.close(4001, 'Unauthorized'); return; }
     if (publisher && publisher.readyState === publisher.OPEN) {
-      publisher.close(4000, 'Replaced by new publisher');
+      publisher.close(4000, 'Replaced');
     }
     publisher = ws;
     console.log('[relay] Publisher connected');
@@ -62,48 +63,74 @@ wss.on('connection', (ws, req) => {
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
 
-      // Track snapshot for late-joining viewers
-      if (msg.type === 'stream-start') {
-        lastSnapshot = null;
-      } else if (msg.type === 'stream-chunk' || msg.type === 'manual-content') {
-        lastSnapshot = msg;
+      // Forward stream events to admin editor (not directly to viewers)
+      if (admin && admin.readyState === admin.OPEN) {
+        admin.send(JSON.stringify(msg));
       }
 
-      broadcast(msg);
+      // Also broadcast stream-start/end so viewer knows state
+      if (msg.type === 'stream-start' || msg.type === 'stream-end') {
+        broadcast(msg);
+      }
     });
 
     ws.on('close', () => {
       if (publisher === ws) publisher = null;
       console.log('[relay] Publisher disconnected');
     });
-
     return;
   }
 
-  // ── Viewer connection ─────────────────────────────────────────────────────
-  if (!token || token.length < 4) {
-    ws.close(4001, 'No token');
+  // ── Admin editor ──────────────────────────────────────────────
+  if (role === 'admin') {
+    if (secret !== RELAY_SECRET) { ws.close(4001, 'Unauthorized'); return; }
+    if (admin && admin.readyState === admin.OPEN) {
+      admin.close(4000, 'Replaced');
+    }
+    admin = ws;
+    console.log('[relay] Admin connected');
+
+    // Send last snapshot so admin picks up where things left off
+    if (lastSnapshot) {
+      ws.send(JSON.stringify(lastSnapshot));
+    }
+
+    ws.on('message', (raw) => {
+      let msg;
+      try { msg = JSON.parse(raw); } catch { return; }
+
+      // Admin edits → broadcast to all viewers
+      if (msg.type === 'admin-edit') {
+        lastSnapshot = msg;
+        broadcast(msg);
+      }
+    });
+
+    ws.on('close', () => {
+      if (admin === ws) admin = null;
+      console.log('[relay] Admin disconnected');
+    });
     return;
   }
+
+  // ── Viewer ────────────────────────────────────────────────────
+  if (!token || token.length < 4) { ws.close(4001, 'No token'); return; }
 
   viewers.add(ws);
   console.log(`[relay] Viewer connected (${viewers.size} total)`);
 
-  // Send current content immediately so late joiners see something
+  // Send current content immediately
   if (lastSnapshot) {
     ws.send(JSON.stringify(lastSnapshot));
   }
 
   ws.on('message', (raw) => {
-    // Viewers can send user-note messages (typed notes from Electron editor)
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'user-note') {
       broadcast(msg);
-      // Also echo back to publisher if connected
-      if (publisher && publisher.readyState === publisher.OPEN) {
-        publisher.send(JSON.stringify(msg));
-      }
+      if (admin && admin.readyState === admin.OPEN) admin.send(JSON.stringify(msg));
+      if (publisher && publisher.readyState === publisher.OPEN) publisher.send(JSON.stringify(msg));
     }
   });
 

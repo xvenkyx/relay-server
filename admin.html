@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Editor</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #222;
+      --border: #2a2a2a;
+      --text: #e0e0e0;
+      --muted: #666;
+      --accent: #4a7fff;
+      --green: #4caf50;
+      --yellow: #f0b429;
+      --red: #e57373;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ──────────────────────────────────────── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #topbar-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      margin-right: 4px;
+    }
+
+    #status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #444;
+      flex-shrink: 0;
+    }
+    #status-dot.connected { background: var(--green); }
+    #status-dot.streaming { background: var(--accent); animation: pulse 0.9s infinite; }
+    #status-dot.error     { background: var(--red); }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+    #status-text { font-size: 11px; color: var(--muted); }
+
+    .spacer { flex: 1; }
+
+    #viewer-count {
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+
+    #clear-btn {
+      font-size: 11px;
+      padding: 3px 10px;
+      background: none;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    #clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Formatting toolbar ───────────────────────────── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 5px 14px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .fmt-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 3px 7px;
+      line-height: 1;
+      transition: background 0.1s, border-color 0.1s;
+      font-family: inherit;
+    }
+    .fmt-btn:hover { background: #2a2a2a; border-color: #3a3a3a; }
+    .fmt-btn.active { background: #2a3a5a; border-color: var(--accent); color: #7ab0ff; }
+
+    .fmt-sep {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
+
+    .fmt-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 12px;
+      padding: 2px 4px;
+      cursor: pointer;
+      outline: none;
+    }
+    .fmt-select:focus { border-color: var(--accent); }
+
+    /* ── Editor area ──────────────────────────────────── */
+    #editor-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+    #editor-wrap::-webkit-scrollbar { width: 5px; }
+    #editor-wrap::-webkit-scrollbar-track { background: transparent; }
+    #editor-wrap::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    #editor {
+      min-height: 100%;
+      outline: none;
+      line-height: 1.7;
+      color: var(--text);
+      caret-color: var(--accent);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Rendered AI content styles */
+    #editor p { margin-bottom: 10px; }
+    #editor p:last-child { margin-bottom: 0; }
+
+    #editor h1, #editor h2, #editor h3 {
+      font-weight: 600;
+      color: #fff;
+      margin: 16px 0 6px;
+    }
+    #editor h1 { font-size: 1.25em; }
+    #editor h2 { font-size: 1.1em; }
+    #editor h3 { font-size: 1em; }
+
+    #editor ul, #editor ol { padding-left: 22px; margin-bottom: 10px; }
+    #editor li { margin-bottom: 3px; }
+
+    #editor strong, #editor b { color: #fff; font-weight: 600; }
+    #editor em, #editor i { color: #c8c8c8; font-style: italic; }
+    #editor u { text-decoration: underline; text-underline-offset: 3px; }
+    #editor mark { background: #7a5f00; color: #ffe47a; border-radius: 2px; padding: 0 2px; }
+
+    #editor code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.84em;
+      background: #2a2a2a;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #e0c46a;
+    }
+    #editor pre {
+      background: #1e1e1e;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    #editor pre code {
+      background: none;
+      padding: 0;
+      color: #bbb;
+      font-size: 0.82em;
+    }
+    #editor table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0;
+      font-size: 0.88em;
+    }
+    #editor th, #editor td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    #editor th { background: var(--surface2); color: #fff; }
+    #editor blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      color: var(--muted);
+      margin: 10px 0;
+    }
+    #editor a { color: var(--accent); text-decoration: none; }
+
+    /* Streaming cursor */
+    #stream-cursor {
+      display: inline-block;
+      width: 2px; height: 1em;
+      background: var(--accent);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    #placeholder {
+      color: var(--muted);
+      pointer-events: none;
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      font-size: 14px;
+      line-height: 2;
+    }
+    #placeholder strong { color: #444; display: block; font-size: 15px; margin-bottom: 4px; }
+
+    #editor-wrap { position: relative; }
+
+    /* ── Connection setup overlay ─────────────────────── */
+    #setup-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #setup-overlay.hidden { display: none; }
+
+    #setup-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #setup-box h2 { font-size: 16px; font-weight: 600; color: #fff; }
+    #setup-box p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+    .field-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .field-input {
+      width: 100%;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'Consolas', monospace;
+      outline: none;
+    }
+    .field-input:focus { border-color: var(--accent); }
+
+    #connect-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      border: none;
+      border-radius: 7px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #connect-btn:hover { opacity: 0.88; }
+    #setup-error { color: var(--red); font-size: 12px; min-height: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- Setup overlay -->
+  <div id="setup-overlay">
+    <div id="setup-box">
+      <h2>Admin Editor</h2>
+      <p>Connect to the relay server as admin. Changes you make will be mirrored to the client in real time.</p>
+
+      <div>
+        <div class="field-label">Relay WebSocket URL</div>
+        <input class="field-input" id="relay-url-input" type="text" value="ws://98.92.203.9:3001" spellcheck="false" />
+      </div>
+      <div>
+        <div class="field-label">Relay Secret</div>
+        <input class="field-input" id="relay-secret-input" type="password" value="" spellcheck="false" />
+      </div>
+
+      <div id="setup-error"></div>
+      <button id="connect-btn">Connect</button>
+    </div>
+  </div>
+
+  <!-- Main UI -->
+  <div id="topbar">
+    <span id="topbar-title">Admin Editor</span>
+    <div id="status-dot"></div>
+    <span id="status-text">Not connected</span>
+    <div class="spacer"></div>
+    <span id="viewer-count">0 viewers</span>
+    <button id="clear-btn">Clear</button>
+  </div>
+
+  <div id="toolbar">
+    <select class="fmt-select" id="block-style">
+      <option value="p">Paragraph</option>
+      <option value="h1">Heading 1</option>
+      <option value="h2">Heading 2</option>
+      <option value="h3">Heading 3</option>
+    </select>
+
+    <div class="fmt-sep"></div>
+
+    <button class="fmt-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+    <button class="fmt-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+    <button class="fmt-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+    <button class="fmt-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+    <button class="fmt-btn" data-cmd="hiliteColor" data-val="#7a5f00" title="Highlight">⬛ HL</button>
+
+    <div class="fmt-sep"></div>
+
+    <button class="fmt-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+    <button class="fmt-btn" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+
+    <div class="fmt-sep"></div>
+
+    <button class="fmt-btn" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>
+  </div>
+
+  <div id="editor-wrap">
+    <div id="placeholder">
+      <strong>Admin Editor</strong>
+      AI responses will stream in here. Edit freely — clients see every change live.
+    </div>
+    <div id="editor" contenteditable="true" spellcheck="false"></div>
+  </div>
+
+  <script>
+    // ── State ───────────────────────────────────────────────────
+    let ws = null;
+    let isStreaming = false;
+    let streamCursor = null;
+    let syncTimer = null;
+    let lastSentHTML = '';
+    let viewerCount = 0;
+
+    const editor       = document.getElementById('editor');
+    const statusDot    = document.getElementById('status-dot');
+    const statusText   = document.getElementById('status-text');
+    const viewerCountEl= document.getElementById('viewer-count');
+    const setupOverlay = document.getElementById('setup-overlay');
+    const setupError   = document.getElementById('setup-error');
+    const placeholder  = document.getElementById('placeholder');
+
+    // ── Setup / connect ─────────────────────────────────────────
+    document.getElementById('connect-btn').addEventListener('click', () => {
+      const url    = document.getElementById('relay-url-input').value.trim();
+      const secret = document.getElementById('relay-secret-input').value.trim();
+      if (!url || !secret) { setupError.textContent = 'Fill in both fields.'; return; }
+      setupError.textContent = '';
+      connect(url, secret);
+    });
+
+    // Allow Enter in secret field
+    document.getElementById('relay-secret-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('connect-btn').click();
+    });
+
+    // ── WebSocket ───────────────────────────────────────────────
+    let _relayUrl = '';
+    let _secret   = '';
+
+    function connect(url, secret) {
+      _relayUrl = url;
+      _secret   = secret;
+
+      setStatus('', 'Connecting…');
+      const wsUrl = `${url}?role=admin&secret=${encodeURIComponent(secret)}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setupOverlay.classList.add('hidden');
+        setStatus('connected', 'Connected — 0 viewers');
+      };
+
+      ws.onerror = () => {
+        setupError.textContent = 'Connection failed. Check URL and secret.';
+        setStatus('error', 'Connection error');
+      };
+
+      ws.onclose = (e) => {
+        if (e.code === 4001) {
+          setupError.textContent = 'Wrong secret.';
+          setupOverlay.classList.remove('hidden');
+        }
+        setStatus('error', 'Disconnected — reconnecting…');
+        setTimeout(() => connect(_relayUrl, _secret), 5000);
+      };
+
+      ws.onmessage = ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch { return; }
+        handleMessage(msg);
+      };
+    }
+
+    function setStatus(state, text) {
+      statusDot.className = state;
+      statusText.textContent = text;
+    }
+
+    // ── Incoming messages (from relay) ──────────────────────────
+    function handleMessage(msg) {
+      if (msg.type === 'stream-start') {
+        clearEditor();
+        isStreaming = true;
+        setStatus('streaming', `Streaming… — ${viewerCount} viewers`);
+        addCursor();
+      }
+
+      else if (msg.type === 'stream-chunk') {
+        hidePlaceholder();
+        removeCursor();
+        // Replace editor content with incoming HTML but preserve cursor position
+        setEditorHTML(sanitize(msg.html));
+        addCursor();
+        scheduleSync(); // push to viewers
+      }
+
+      else if (msg.type === 'stream-end') {
+        isStreaming = false;
+        removeCursor();
+        setStatus('connected', `Ready — ${viewerCount} viewers`);
+        scheduleSync();
+      }
+
+      else if (msg.type === 'viewer-count') {
+        viewerCount = msg.count;
+        viewerCountEl.textContent = `${viewerCount} viewer${viewerCount !== 1 ? 's' : ''}`;
+      }
+
+      else if (msg.type === 'admin-edit') {
+        // Our own edit echoed back — ignore
+      }
+    }
+
+    // ── Editor helpers ──────────────────────────────────────────
+    function setEditorHTML(html) {
+      // Save selection, set HTML, restore selection
+      const sel = window.getSelection();
+      let savedRange = null;
+      if (sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+        savedRange = sel.getRangeAt(0).cloneRange();
+      }
+
+      editor.innerHTML = html;
+
+      if (savedRange) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+        } catch {}
+      }
+    }
+
+    function clearEditor() {
+      editor.innerHTML = '';
+      showPlaceholder();
+      lastSentHTML = '';
+    }
+
+    function hidePlaceholder() {
+      placeholder.style.display = 'none';
+    }
+    function showPlaceholder() {
+      placeholder.style.display = '';
+    }
+
+    function addCursor() {
+      removeCursor();
+      streamCursor = document.createElement('span');
+      streamCursor.id = 'stream-cursor';
+      editor.appendChild(streamCursor);
+    }
+
+    function removeCursor() {
+      if (streamCursor && streamCursor.parentNode) {
+        streamCursor.parentNode.removeChild(streamCursor);
+      }
+      streamCursor = null;
+    }
+
+    // ── Sync editor → viewers ───────────────────────────────────
+    function scheduleSync() {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(pushEdit, 30); // 30ms debounce — fast enough to feel live
+    }
+
+    function pushEdit() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      // Get editor HTML without the stream cursor
+      removeCursor();
+      const html = editor.innerHTML;
+      if (isStreaming) addCursor();
+
+      if (html === lastSentHTML) return; // no change
+      lastSentHTML = html;
+
+      ws.send(JSON.stringify({ type: 'admin-edit', html }));
+    }
+
+    // ── Editor input → sync ─────────────────────────────────────
+    editor.addEventListener('input', () => {
+      if (editor.innerHTML.trim() === '' || editor.innerHTML === '<br>') {
+        showPlaceholder();
+      } else {
+        hidePlaceholder();
+      }
+      scheduleSync();
+    });
+
+    // ── Formatting toolbar ──────────────────────────────────────
+    document.querySelectorAll('.fmt-btn[data-cmd]').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // don't lose focus
+        const cmd = btn.dataset.cmd;
+        const val = btn.dataset.val || null;
+        document.execCommand(cmd, false, val);
+        editor.focus();
+        scheduleSync();
+        updateToolbarState();
+      });
+    });
+
+    document.getElementById('block-style').addEventListener('change', (e) => {
+      document.execCommand('formatBlock', false, e.target.value);
+      editor.focus();
+      scheduleSync();
+    });
+
+    function updateToolbarState() {
+      document.querySelectorAll('.fmt-btn[data-cmd]').forEach(btn => {
+        const cmd = btn.dataset.cmd;
+        try {
+          btn.classList.toggle('active', document.queryCommandState(cmd));
+        } catch {}
+      });
+    }
+
+    editor.addEventListener('keyup', updateToolbarState);
+    editor.addEventListener('mouseup', updateToolbarState);
+    editor.addEventListener('selectionchange', updateToolbarState);
+
+    // ── Clear button ────────────────────────────────────────────
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      clearEditor();
+      pushEdit();
+    });
+
+    // ── Sanitize incoming HTML ──────────────────────────────────
+    function sanitize(html) {
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
+      div.querySelectorAll('*').forEach(el => {
+        ['onclick','onload','onerror','onmouseover','onfocus','onblur'].forEach(a => el.removeAttribute(a));
+        const href = el.getAttribute('href');
+        if (href && href.toLowerCase().startsWith('javascript:')) el.removeAttribute('href');
+      });
+      return div.innerHTML;
+    }
+
+    // ── Keyboard shortcuts ──────────────────────────────────────
+    editor.addEventListener('keydown', (e) => {
+      // Tab → indent
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        scheduleSync();
+      }
+    });
+  </script>
+</body>
+</html>

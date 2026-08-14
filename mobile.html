@@ -233,32 +233,20 @@
           addCursor();
         }
 
-        else if (msg.type === 'stream-chunk') {
-          emptySate && emptySate.remove();
-          removeCursor();
-          aiContent.innerHTML = sanitize(msg.html);
-          addCursor();
-          window.scrollTo(0, document.body.scrollHeight);
-        }
-
         else if (msg.type === 'stream-end') {
           isStreaming = false;
           removeCursor();
           setStatus('connected', 'Done');
         }
 
-        else if (msg.type === 'manual-content') {
+        // Live mirror of admin editor
+        else if (msg.type === 'admin-edit') {
           emptySate && emptySate.remove();
-          if (msg.replace) {
-            aiContent.innerHTML = sanitize(msg.html);
-            notesContent.innerHTML = '';
-          } else {
-            const div = document.createElement('div');
-            div.innerHTML = sanitize(msg.html);
-            aiContent.appendChild(div);
-          }
+          removeCursor();
+          aiContent.innerHTML = sanitize(msg.html);
+          if (isStreaming) addCursor();
           window.scrollTo(0, document.body.scrollHeight);
-          setStatus('connected', 'Updated');
+          if (!isStreaming) setStatus('connected', 'Live');
         }
 
         else if (msg.type === 'user-note') {
