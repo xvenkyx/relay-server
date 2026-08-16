@@ -296,6 +296,84 @@
     }
     #connect-btn:hover { opacity: 0.88; }
     #setup-error { color: var(--red); font-size: 12px; min-height: 16px; }
+
+    /* ── Notification panel ───────────────────────────── */
+    #notify-panel {
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      padding: 10px 14px;
+      display: flex;
+      gap: 16px;
+    }
+
+    .notify-zone {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .notify-zone-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    .notify-zone.red .notify-zone-label  { color: var(--red); }
+    .notify-zone.green .notify-zone-label { color: var(--green); }
+
+    .notify-phrases {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .phrase-btn {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 4px;
+      border: 1px solid;
+      cursor: pointer;
+      background: none;
+      font-family: inherit;
+      transition: opacity 0.1s;
+    }
+    .phrase-btn:hover { opacity: 0.75; }
+    .notify-zone.red   .phrase-btn { color: var(--red);   border-color: var(--red); }
+    .notify-zone.green .phrase-btn { color: var(--green); border-color: var(--green); }
+
+    .notify-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .notify-input {
+      flex: 1;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 8px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+    }
+    .notify-input:focus { border-color: #555; }
+
+    .notify-send {
+      padding: 4px 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .notify-zone.red   .notify-send { background: var(--red);   color: #fff; }
+    .notify-zone.green .notify-send { background: var(--green); color: #111; }
+    .notify-send:hover { opacity: 0.85; }
+    .notify-send:disabled { opacity: 0.4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -362,6 +440,41 @@
       AI responses will stream in here. Edit freely — clients see every change live.
     </div>
     <div id="editor" contenteditable="true" spellcheck="false"></div>
+  </div>
+
+  <!-- Notification panel -->
+  <div id="notify-panel">
+
+    <div class="notify-zone red">
+      <div class="notify-zone-label">🔴 Alert</div>
+      <div class="notify-phrases">
+        <button class="phrase-btn" data-color="red" data-text="Stop">Stop</button>
+        <button class="phrase-btn" data-color="red" data-text="Read slow">Read slow</button>
+        <button class="phrase-btn" data-color="red" data-text="Pause">Pause</button>
+        <button class="phrase-btn" data-color="red" data-text="Wrong answer">Wrong answer</button>
+        <button class="phrase-btn" data-color="red" data-text="Careful">Careful</button>
+      </div>
+      <div class="notify-row">
+        <input class="notify-input" id="red-input" type="text" placeholder="Custom message…" maxlength="80" />
+        <button class="notify-send" id="red-send">Send</button>
+      </div>
+    </div>
+
+    <div class="notify-zone green">
+      <div class="notify-zone-label">🟢 Good</div>
+      <div class="notify-phrases">
+        <button class="phrase-btn" data-color="green" data-text="Nice">Nice</button>
+        <button class="phrase-btn" data-color="green" data-text="Excellent">Excellent</button>
+        <button class="phrase-btn" data-color="green" data-text="Keep going">Keep going</button>
+        <button class="phrase-btn" data-color="green" data-text="Perfect">Perfect</button>
+        <button class="phrase-btn" data-color="green" data-text="You got this">You got this</button>
+      </div>
+      <div class="notify-row">
+        <input class="notify-input" id="green-input" type="text" placeholder="Custom message…" maxlength="80" />
+        <button class="notify-send" id="green-send">Send</button>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -607,6 +720,47 @@
         document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
         scheduleSync();
       }
+      // Ctrl+Shift+H → highlight selected text
+      if (e.key === 'H' && e.ctrlKey && e.shiftKey) {
+        e.preventDefault();
+        document.execCommand('hiliteColor', false, '#7a5f00');
+        scheduleSync();
+        updateToolbarState();
+      }
+    });
+
+    // ── Notifications ───────────────────────────────────────────
+    function sendPopup(color, text) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!text.trim()) return;
+      ws.send(JSON.stringify({ type: 'popup', color, text: text.trim() }));
+    }
+
+    // Phrase buttons
+    document.querySelectorAll('.phrase-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sendPopup(btn.dataset.color, btn.dataset.text);
+      });
+    });
+
+    // Red custom send
+    document.getElementById('red-send').addEventListener('click', () => {
+      const input = document.getElementById('red-input');
+      sendPopup('red', input.value);
+      input.value = '';
+    });
+    document.getElementById('red-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('red-send').click();
+    });
+
+    // Green custom send
+    document.getElementById('green-send').addEventListener('click', () => {
+      const input = document.getElementById('green-input');
+      sendPopup('green', input.value);
+      input.value = '';
+    });
+    document.getElementById('green-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('green-send').click();
     });
   </script>
 </body>

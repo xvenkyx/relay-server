@@ -104,6 +104,11 @@ wss.on('connection', (ws, req) => {
         lastSnapshot = msg;
         broadcast(msg);
       }
+
+      // Popup notifications → broadcast to all viewers (not stored in snapshot)
+      if (msg.type === 'popup') {
+        broadcast(msg);
+      }
     });
 
     ws.on('close', () => {
