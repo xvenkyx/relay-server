@@ -394,6 +394,18 @@
       div.querySelectorAll('[onclick],[onload],[onerror],[onmouseover]').forEach(el => {
         ['onclick','onload','onerror','onmouseover'].forEach(a => el.removeAttribute(a));
       });
+      // Normalize ChatGPT code blocks: <pre><div...><code>...</code></div></pre> → <pre><code>...</code></pre>
+      div.querySelectorAll('pre').forEach(pre => {
+        const code = pre.querySelector('code');
+        if (code && pre.querySelector('div')) {
+          const clean = document.createElement('pre');
+          const cleanCode = document.createElement('code');
+          cleanCode.className = code.className;
+          cleanCode.textContent = code.textContent;
+          clean.appendChild(cleanCode);
+          pre.replaceWith(clean);
+        }
+      });
       return div.innerHTML;
     }
 
