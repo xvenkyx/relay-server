@@ -163,9 +163,74 @@
       padding: 60px 20px;
       font-size: 14px;
     }
+
+    /* ── License gate ── */
+    #license-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 24px;
+    }
+    #license-overlay.hidden { display: none; }
+    #license-box {
+      background: var(--surface);
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #license-box h2 { font-size: 16px; font-weight: 600; color: #fff; }
+    #license-box p  { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    #license-input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 7px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 15px;
+      font-family: 'Courier New', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      outline: none;
+      text-align: center;
+    }
+    #license-input:focus { border-color: var(--accent); }
+    #license-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      border: none;
+      border-radius: 7px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #license-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #license-error { color: #e57373; font-size: 13px; min-height: 16px; text-align: center; }
   </style>
 </head>
 <body>
+  <!-- License gate -->
+  <div id="license-overlay">
+    <div id="license-box">
+      <h2>Enter Access Code</h2>
+      <p>Enter the license code provided to you to access the live view.</p>
+      <input id="license-input" type="text" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="19" autocomplete="off" autocorrect="off" spellcheck="false" />
+      <div id="license-error"></div>
+      <button id="license-btn">Connect</button>
+    </div>
+  </div>
+
   <div id="status-bar">
     <div id="status-dot"></div>
     <span id="status-text">Connecting…</span>
@@ -179,17 +244,53 @@
   </div>
 
   <script>
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const aiContent = document.getElementById('ai-content');
+    const statusDot    = document.getElementById('status-dot');
+    const statusText   = document.getElementById('status-text');
+    const aiContent    = document.getElementById('ai-content');
     const notesContent = document.getElementById('notes-content');
-    const emptySate = document.getElementById('empty-state');
+    const emptySate    = document.getElementById('empty-state');
+    const overlay      = document.getElementById('license-overlay');
+    const licenseInput = document.getElementById('license-input');
+    const licenseBtn   = document.getElementById('license-btn');
+    const licenseError = document.getElementById('license-error');
 
-    // Relay URL is this same server but as WebSocket
-    const wsUrl = location.origin.replace(/^http/, 'ws') + '?role=viewer&token=mobile';
     let ws;
     let isStreaming = false;
     let cursor;
+    let licenseCode = '';
+
+    // ── License gate ────────────────────────────────────────────
+
+    // Auto-format input as XXXX-XXXX-XXXX-XXXX
+    licenseInput.addEventListener('input', () => {
+      let val = licenseInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      val = val.match(/.{1,4}/g)?.join('-') || val;
+      licenseInput.value = val;
+    });
+
+    licenseInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') licenseBtn.click();
+    });
+
+    licenseBtn.addEventListener('click', () => {
+      const code = licenseInput.value.trim();
+      if (!code) { licenseError.textContent = 'Please enter your access code.'; return; }
+      licenseError.textContent = '';
+      licenseBtn.disabled = true;
+      licenseBtn.textContent = 'Connecting…';
+      licenseCode = code;
+      try { localStorage.setItem('viewer_code', code); } catch {}
+      overlay.classList.add('hidden');
+      connect();
+    });
+
+    // Restore saved code
+    try {
+      const saved = localStorage.getItem('viewer_code');
+      if (saved) licenseInput.value = saved;
+    } catch {}
+
+    // ── WebSocket ───────────────────────────────────────────────
 
     function setStatus(state, text) {
       statusDot.className = state;
@@ -209,11 +310,21 @@
     }
 
     function connect() {
+      const wsUrl = location.origin.replace(/^http/, 'ws') + `?role=viewer&token=${encodeURIComponent(licenseCode)}`;
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => setStatus('connected', 'Connected');
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        if (e.code === 4003) {
+          // License invalid or revoked — show gate again
+          licenseBtn.disabled = false;
+          licenseBtn.textContent = 'Connect';
+          licenseError.textContent = e.reason || 'Access denied. Check your code.';
+          overlay.classList.remove('hidden');
+          try { localStorage.removeItem('viewer_code'); } catch {}
+          return;
+        }
         setStatus('', 'Disconnected — reconnecting…');
         setTimeout(connect, 3000);
       };
@@ -239,7 +350,6 @@
           setStatus('connected', 'Done');
         }
 
-        // Live mirror of admin editor
         else if (msg.type === 'admin-edit') {
           emptySate && emptySate.remove();
           removeCursor();
@@ -259,7 +369,7 @@
       };
     }
 
-    // Basic sanitizer — strips script tags, keeps formatting tags
+    // Basic sanitizer
     function sanitize(html) {
       const div = document.createElement('div');
       div.innerHTML = html;
@@ -270,7 +380,15 @@
       return div.innerHTML;
     }
 
-    connect();
+    // Auto-connect if code already saved
+    try {
+      const saved = localStorage.getItem('viewer_code');
+      if (saved) {
+        licenseCode = saved;
+        overlay.classList.add('hidden');
+        connect();
+      }
+    } catch {}
   </script>
 </body>
 </html>
