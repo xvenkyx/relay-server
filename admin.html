@@ -595,14 +595,15 @@
 
     // ── Editor helpers ──────────────────────────────────────────
     function setEditorHTML(html) {
-      // Save selection, set HTML, restore selection
       const sel = window.getSelection();
       let savedRange = null;
       if (sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
         savedRange = sel.getRangeAt(0).cloneRange();
       }
 
+      const scrollTop = document.getElementById('editor-wrap').scrollTop;
       editor.innerHTML = html;
+      document.getElementById('editor-wrap').scrollTop = scrollTop;
 
       if (savedRange) {
         try {
