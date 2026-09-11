@@ -79,7 +79,6 @@
       margin-bottom: 12px;
     }
     #ai-content li { margin-bottom: 4px; }
-    #ai-content li > p { margin-bottom: 0; }
 
     #ai-content strong, #ai-content b { color: #fff; font-weight: 600; }
     #ai-content em, #ai-content i { color: #ccc; font-style: italic; }
@@ -104,20 +103,9 @@
     #ai-content pre code {
       background: none;
       padding: 0;
+      color: #ccc;
       font-size: 0.83em;
     }
-    /* ChatGPT CodeMirror code blocks */
-    #ai-content .cm-editor, #ai-content [id="code-block-viewer"] {
-      background: var(--code-bg);
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 14px;
-      overflow-x: auto;
-      margin-bottom: 14px;
-      font-family: 'Courier New', 'Consolas', monospace;
-      font-size: 0.83em;
-    }
-    #ai-content .cm-content, #ai-content .cm-scroller { background: none; font-family: inherit; }
 
     #ai-content table {
       border-collapse: collapse;
