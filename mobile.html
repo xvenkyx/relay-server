@@ -401,7 +401,7 @@
           const clean = document.createElement('pre');
           const cleanCode = document.createElement('code');
           cleanCode.className = code.className;
-          cleanCode.textContent = code.textContent;
+          cleanCode.innerHTML = code.innerHTML;
           clean.appendChild(cleanCode);
           pre.replaceWith(clean);
         }
