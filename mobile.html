@@ -126,22 +126,12 @@
       margin-bottom: 12px;
     }
 
-    /* ChatGPT CodeMirror syntax colors */
-    #ai-content .cm-keyword   { color: #c792ea; }
-    #ai-content .cm-def       { color: #82aaff; }
-    #ai-content .cm-variable  { color: #f07178; }
-    #ai-content .cm-variable-2{ color: #eeffff; }
-    #ai-content .cm-property  { color: #f07178; }
-    #ai-content .cm-operator  { color: #89ddff; }
-    #ai-content .cm-string    { color: #c3e88d; }
-    #ai-content .cm-string-2  { color: #f07178; }
-    #ai-content .cm-number    { color: #f78c6c; }
-    #ai-content .cm-atom      { color: #f78c6c; }
-    #ai-content .cm-comment   { color: #546e7a; font-style: italic; }
-    #ai-content .cm-tag       { color: #f07178; }
-    #ai-content .cm-attribute { color: #ffcb6b; }
-    #ai-content .cm-builtin   { color: #ffcb6b; }
-    #ai-content .cm-type      { color: #ffcb6b; }
+    /* ChatGPT CodeMirror6 generated syntax classes */
+    #ai-content .ͼv  { color: #c792ea; } /* keywords / operators */
+    #ai-content .ͼy  { color: #f78c6c; } /* numbers */
+    #ai-content .ͼz  { color: #c3e88d; } /* strings */
+    #ai-content .ͼ11 { color: #82aaff; } /* identifiers */
+    #ai-content .ͼ1  { color: #546e7a; font-style: italic; } /* comments */
 
     .user-note {
       background: var(--note-bg);
@@ -394,14 +384,14 @@
       div.querySelectorAll('[onclick],[onload],[onerror],[onmouseover]').forEach(el => {
         ['onclick','onload','onerror','onmouseover'].forEach(a => el.removeAttribute(a));
       });
-      // Normalize ChatGPT code blocks: <pre><div...><code>...</code></div></pre> → <pre><code>...</code></pre>
+      // Normalize ChatGPT code blocks: outer <pre> contains div wrappers with inner pre.cm-content > code
       div.querySelectorAll('pre').forEach(pre => {
-        const code = pre.querySelector('code');
-        if (code && pre.querySelector('div')) {
+        if (pre.closest('pre') !== pre) return; // skip inner pre elements
+        const innerCode = pre.querySelector('pre.cm-content code, .cm-content code');
+        if (innerCode) {
           const clean = document.createElement('pre');
           const cleanCode = document.createElement('code');
-          cleanCode.className = code.className;
-          cleanCode.innerHTML = code.innerHTML;
+          cleanCode.innerHTML = innerCode.innerHTML;
           clean.appendChild(cleanCode);
           pre.replaceWith(clean);
         }
