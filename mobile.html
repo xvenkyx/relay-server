@@ -106,6 +106,18 @@
       padding: 0;
       font-size: 0.83em;
     }
+    /* ChatGPT CodeMirror code blocks */
+    #ai-content .cm-editor, #ai-content [id="code-block-viewer"] {
+      background: var(--code-bg);
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+      margin-bottom: 14px;
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: 0.83em;
+    }
+    #ai-content .cm-content, #ai-content .cm-scroller { background: none; font-family: inherit; }
 
     #ai-content table {
       border-collapse: collapse;
@@ -374,15 +386,14 @@
       const div = document.createElement('div');
       div.innerHTML = html;
 
-      // Strip AI UI chrome — copy buttons and SVGs that are NOT inside a code block
-      div.querySelectorAll('button').forEach(el => {
-        if (!el.closest('pre')) el.remove();
-      });
+      // Strip Claude's copy button (sticky + copy) and ChatGPT's header bar (sticky + select-none)
+      div.querySelectorAll('[class*="sticky"][class*="copy"], [class*="sticky"][class*="select-none"]').forEach(el => el.remove());
+      // Strip ChatGPT's fade overlay inside code blocks
+      div.querySelectorAll('[class*="pointer-events-none"][class*="absolute"]').forEach(el => el.remove());
+      // Strip SVGs not inside pre
       div.querySelectorAll('svg').forEach(el => {
         if (!el.closest('pre')) el.remove();
       });
-      // Strip Claude's code block header bar (contains language label + copy button)
-      div.querySelectorAll('[class*="codeBlock"] > :first-child:not(pre), [class*="code-block"] > :first-child:not(pre)').forEach(el => el.remove());
 
       // Strip li > p wrapper that Claude adds (causes extra spacing)
       div.querySelectorAll('li > p').forEach(p => {
