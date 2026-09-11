@@ -166,6 +166,7 @@
 
     #editor ul, #editor ol { padding-left: 22px; margin-bottom: 10px; }
     #editor li { margin-bottom: 3px; }
+    #editor li > p { margin-bottom: 0; }
 
     #editor strong, #editor b { color: #fff; font-weight: 600; }
     #editor em, #editor i { color: #c8c8c8; font-style: italic; }
@@ -703,6 +704,17 @@
     function sanitize(html) {
       const div = document.createElement('div');
       div.innerHTML = html;
+
+      // Strip AI UI chrome — copy buttons, action bars, SVGs outside pre
+      div.querySelectorAll('button, [class*="copy"], [class*="action"], [aria-label="Copy"], [data-testid]').forEach(el => el.remove());
+      div.querySelectorAll('svg').forEach(el => el.remove());
+
+      // Strip li > p wrapper that Claude adds (causes extra spacing)
+      div.querySelectorAll('li > p').forEach(p => {
+        while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+        p.remove();
+      });
+
       div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
       div.querySelectorAll('*').forEach(el => {
         ['onclick','onload','onerror','onmouseover','onfocus','onblur'].forEach(a => el.removeAttribute(a));
