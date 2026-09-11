@@ -715,22 +715,6 @@
     function sanitize(html) {
       const div = document.createElement('div');
       div.innerHTML = html;
-
-      // Strip Claude's copy button (sticky + copy) and ChatGPT's header bar (sticky + select-none)
-      div.querySelectorAll('[class*="sticky"][class*="copy"], [class*="sticky"][class*="select-none"]').forEach(el => el.remove());
-      // Strip ChatGPT's fade overlay inside code blocks
-      div.querySelectorAll('[class*="pointer-events-none"][class*="absolute"]').forEach(el => el.remove());
-      // Strip SVGs not inside pre
-      div.querySelectorAll('svg').forEach(el => {
-        if (!el.closest('pre')) el.remove();
-      });
-
-      // Strip li > p wrapper that Claude adds (causes extra spacing)
-      div.querySelectorAll('li > p').forEach(p => {
-        while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
-        p.remove();
-      });
-
       div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
       div.querySelectorAll('*').forEach(el => {
         ['onclick','onload','onerror','onmouseover','onfocus','onblur'].forEach(a => el.removeAttribute(a));
