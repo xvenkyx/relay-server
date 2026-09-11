@@ -104,7 +104,6 @@
     #ai-content pre code {
       background: none;
       padding: 0;
-      color: #ccc;
       font-size: 0.83em;
     }
 
@@ -375,9 +374,15 @@
       const div = document.createElement('div');
       div.innerHTML = html;
 
-      // Strip AI UI chrome — copy buttons, action bars, SVGs
-      div.querySelectorAll('button, [class*="copy"], [class*="action"], [aria-label="Copy"], [data-testid]').forEach(el => el.remove());
-      div.querySelectorAll('svg').forEach(el => el.remove());
+      // Strip AI UI chrome — copy buttons and SVGs that are NOT inside a code block
+      div.querySelectorAll('button').forEach(el => {
+        if (!el.closest('pre')) el.remove();
+      });
+      div.querySelectorAll('svg').forEach(el => {
+        if (!el.closest('pre')) el.remove();
+      });
+      // Strip Claude's code block header bar (contains language label + copy button)
+      div.querySelectorAll('[class*="codeBlock"] > :first-child:not(pre), [class*="code-block"] > :first-child:not(pre)').forEach(el => el.remove());
 
       // Strip li > p wrapper that Claude adds (causes extra spacing)
       div.querySelectorAll('li > p').forEach(p => {
