@@ -393,7 +393,7 @@
 
       <div>
         <div class="field-label">Relay WebSocket URL</div>
-        <input class="field-input" id="relay-url-input" type="text" value="ws://98.92.203.9:3001" spellcheck="false" />
+        <input class="field-input" id="relay-url-input" type="text" value="wss://relay.vhagar.online" spellcheck="false" />
       </div>
       <div>
         <div class="field-label">Relay Secret</div>
@@ -501,13 +501,19 @@
     const setupError   = document.getElementById('setup-error');
     const placeholder  = document.getElementById('placeholder');
 
+    const ADMIN_PASSWORD = 'bingomadangles';
+    const RELAY_SECRET   = '60o5Ihbg8ODRLaAiWx7mwcsQtBEzGe4Y';
+    const SESSION_EXPIRY = 10 * 60 * 60 * 1000; // 10 hours
+
     // ── Setup / connect ─────────────────────────────────────────
     document.getElementById('connect-btn').addEventListener('click', () => {
-      const url    = document.getElementById('relay-url-input').value.trim();
-      const secret = document.getElementById('relay-secret-input').value.trim();
-      if (!url || !secret) { setupError.textContent = 'Fill in both fields.'; return; }
+      const url      = document.getElementById('relay-url-input').value.trim();
+      const password = document.getElementById('relay-secret-input').value.trim();
+      if (!url || !password) { setupError.textContent = 'Fill in both fields.'; return; }
+      if (password !== ADMIN_PASSWORD) { setupError.textContent = 'Wrong password.'; return; }
       setupError.textContent = '';
-      connect(url, secret);
+      try { localStorage.setItem('admin_session', JSON.stringify({ url, ts: Date.now() })); } catch {}
+      connect(url, RELAY_SECRET);
     });
 
     // Allow Enter in secret field
@@ -813,6 +819,15 @@
     document.getElementById('green-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('green-send').click();
     });
+
+    // ── Auto-connect if session still valid ─────────────────────
+    try {
+      const saved = JSON.parse(localStorage.getItem('admin_session') || 'null');
+      if (saved && (Date.now() - saved.ts) < SESSION_EXPIRY) {
+        setupOverlay.classList.add('hidden');
+        connect(saved.url, RELAY_SECRET);
+      }
+    } catch {}
   </script>
 </body>
 </html>
