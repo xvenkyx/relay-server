@@ -547,9 +547,13 @@
         if (e.code === 4001) {
           setupError.textContent = 'Wrong secret.';
           setupOverlay.classList.remove('hidden');
+          return; // don't reconnect on auth failure
         }
-        setStatus('error', 'Disconnected — reconnecting…');
-        setTimeout(() => connect(_relayUrl, _secret), 5000);
+        // Only reconnect if we successfully connected before (overlay is hidden)
+        if (setupOverlay.classList.contains('hidden')) {
+          setStatus('error', 'Disconnected — reconnecting…');
+          setTimeout(() => connect(_relayUrl, _secret), 5000);
+        }
       };
 
       ws.onmessage = ({ data }) => {
@@ -824,7 +828,7 @@
     try {
       const saved = JSON.parse(localStorage.getItem('admin_session') || 'null');
       if (saved && (Date.now() - saved.ts) < SESSION_EXPIRY) {
-        setupOverlay.classList.add('hidden');
+        // Don't hide overlay yet — let ws.onopen do it once connection succeeds
         connect(saved.url, RELAY_SECRET);
       }
     } catch {}
