@@ -503,7 +503,6 @@
 
     const ADMIN_PASSWORD = 'bingomadangles';
     const RELAY_SECRET   = '60o5Ihbg8ODRLaAiWx7mwcsQtBEzGe4Y';
-    const SESSION_EXPIRY = 10 * 60 * 60 * 1000; // 10 hours
 
     // ── Setup / connect ─────────────────────────────────────────
     document.getElementById('connect-btn').addEventListener('click', () => {
@@ -512,7 +511,6 @@
       if (!url || !password) { setupError.textContent = 'Fill in both fields.'; return; }
       if (password !== ADMIN_PASSWORD) { setupError.textContent = 'Wrong password.'; return; }
       setupError.textContent = '';
-      try { localStorage.setItem('admin_session', JSON.stringify({ url, ts: Date.now() })); } catch {}
       connect(url, RELAY_SECRET);
     });
 
@@ -824,14 +822,7 @@
       if (e.key === 'Enter') document.getElementById('green-send').click();
     });
 
-    // ── Auto-connect if session still valid ─────────────────────
-    try {
-      const saved = JSON.parse(localStorage.getItem('admin_session') || 'null');
-      if (saved && (Date.now() - saved.ts) < SESSION_EXPIRY) {
-        // Don't hide overlay yet — let ws.onopen do it once connection succeeds
-        connect(saved.url, RELAY_SECRET);
-      }
-    } catch {}
+    try { localStorage.removeItem('admin_session'); } catch {}
   </script>
 </body>
 </html>
