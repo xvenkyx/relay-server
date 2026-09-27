@@ -84,7 +84,15 @@ wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `http://localhost`);
   const role = url.searchParams.get('role');
   const secret = url.searchParams.get('secret');
-  const code = (url.searchParams.get('token') || '').trim().toUpperCase();
+  const rawToken = (url.searchParams.get('token') || '').trim();
+  // If the token is a JWT (three base64 segments), extract the `code` field from its payload
+  let code = rawToken.toUpperCase();
+  if (rawToken.split('.').length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(rawToken.split('.')[1], 'base64').toString('utf8'));
+      if (payload.code) code = payload.code.trim().toUpperCase();
+    } catch { /* malformed JWT — fall through with raw value */ }
+  }
 
   // ── Publisher (Chrome extension) ──────────────────────────────
   if (role === 'publisher') {
